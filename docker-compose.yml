@@ -4,5 +4,8 @@ services:
     ports:
       - "8066:8066"
     volumes:
-      - ./data:/app/data
+      - app_data:/app/data
     restart: unless-stopped
+
+volumes:
+  app_data:
