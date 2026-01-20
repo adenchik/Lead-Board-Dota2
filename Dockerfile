@@ -11,7 +11,7 @@ COPY main.py .
 COPY templates templates/
 COPY static static/
 
-RUN chown -R appuser:appuser /app
+RUN mkdir -p data && chown -R appuser:appuser /app
 USER appuser
 
 EXPOSE 8066
