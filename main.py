@@ -1,6 +1,7 @@
 import asyncio
 import time
 from contextlib import asynccontextmanager
+from pathlib import Path
 
 import httpx
 import aiosqlite
@@ -10,7 +11,9 @@ from fastapi.responses import HTMLResponse, RedirectResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 
-DB_PATH = "leaderboard.db"
+DATA_DIR = Path("data")
+DATA_DIR.mkdir(exist_ok=True)
+DB_PATH = DATA_DIR / "leaderboard.db"
 REGIONS = ["americas", "europe", "se_asia", "china"]
 API_URL = "https://www.dota2.com/webapi/ILeaderboard/GetDivisionLeaderboard/v0001"
 
@@ -19,24 +22,30 @@ async def init_db():
     """Initialize SQLite database."""
     async with aiosqlite.connect(DB_PATH) as db:
         await db.execute("""
-            CREATE TABLE IF NOT EXISTS players (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                region TEXT NOT NULL,
-                rank INTEGER NOT NULL,
-                name TEXT NOT NULL,
-                team_id INTEGER,
-                team_tag TEXT,
-                sponsor TEXT,
-                country TEXT,
-                UNIQUE(region, rank)
-            )
-        """)
+                         CREATE TABLE IF NOT EXISTS players
+                         (
+                             id INTEGER PRIMARY KEY AUTOINCREMENT,
+                             region TEXT NOT NULL,
+                             rank INTEGER NOT NULL,
+                             name TEXT NOT NULL,
+                             team_id INTEGER,
+                             team_tag TEXT,
+                             sponsor TEXT,
+                             country TEXT,
+                             UNIQUE
+                         (
+                             region,
+                             rank
+                         )
+                             )
+                         """)
         await db.execute("""
-            CREATE TABLE IF NOT EXISTS metadata (
-                key TEXT PRIMARY KEY,
-                value INTEGER
-            )
-        """)
+                         CREATE TABLE IF NOT EXISTS metadata
+                         (
+                             key TEXT PRIMARY KEY,
+                             value INTEGER
+                         )
+                         """)
         await db.execute("CREATE INDEX IF NOT EXISTS idx_region ON players(region)")
         await db.execute("CREATE INDEX IF NOT EXISTS idx_country ON players(country)")
         await db.commit()
@@ -118,12 +127,12 @@ async def save_to_db(data: dict):
 
 
 async def get_players(
-    region: str,
-    rank_from: int | None = None,
-    rank_to: int | None = None,
-    countries: list[str] | None = None,
-    team: str | None = None,
-    name_player: str | None = None,
+        region: str,
+        rank_from: int | None = None,
+        rank_to: int | None = None,
+        countries: list[str] | None = None,
+        team: str | None = None,
+        name_player: str | None = None,
 ) -> list[dict]:
     """Get players from database with filters."""
     query = "SELECT rank, name, team_id, team_tag, sponsor, country FROM players WHERE region = ?"
@@ -168,8 +177,8 @@ async def get_countries(region: str) -> dict[str, str]:
     """Get unique countries for a region."""
     async with aiosqlite.connect(DB_PATH) as db:
         async with db.execute(
-            "SELECT DISTINCT UPPER(country) FROM players WHERE region = ? AND country IS NOT NULL",
-            (region,),
+                "SELECT DISTINCT UPPER(country) FROM players WHERE region = ? AND country IS NOT NULL",
+                (region,),
         ) as cursor:
             codes = [row[0] for row in await cursor.fetchall()]
 
@@ -197,7 +206,7 @@ async def scheduled_task():
                 now = int(time.time())
 
                 if next_update > now:
-                    sleep_for = next_update - now
+                    sleep_for = (next_update - now) + 300
                     print(f"Next update in {sleep_for // 60} minutes")
                     await asyncio.sleep(sleep_for)
                 else:
@@ -230,13 +239,13 @@ async def default_region():
 
 @app.get("/{region}", response_class=HTMLResponse)
 async def read_root(
-    request: Request,
-    region: str,
-    rank_from: int | None = Query(None),
-    rank_to: int | None = Query(None),
-    countries: str | None = Query(None),
-    team: str | None = Query(None),
-    name_player: str | None = Query(None),
+        request: Request,
+        region: str,
+        rank_from: int | None = Query(None),
+        rank_to: int | None = Query(None),
+        countries: str | None = Query(None),
+        team: str | None = Query(None),
+        name_player: str | None = Query(None),
 ):
     if region not in REGIONS:
         return RedirectResponse(url="/europe")
