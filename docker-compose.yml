@@ -2,11 +2,10 @@ services:
   app:
     build: .
     ports:
+      - "8066:8066"
     volumes:
       - app_data:/app/data
     restart: unless-stopped
 
 volumes:
   app_data:
-
-      - "8066:8066"
