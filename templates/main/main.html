@@ -1,0 +1,212 @@
+<!doctype html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Dota 2 Leaderboard</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    colors: {
+                        dota: {
+                            dark: '#1a1a2e',
+                            darker: '#16162a',
+                            accent: '#e63946',
+                            gold: '#d4af37'
+                        }
+                    }
+                }
+            }
+        }
+    </script>
+</head>
+<body class="bg-dota-darker text-gray-200 min-h-screen">
+    <header class="bg-dota-dark border-b border-gray-700">
+        <div class="max-w-6xl mx-auto px-4 py-6">
+            <h1 class="text-2xl font-bold text-center text-white mb-2">Dota 2 Leaderboard</h1>
+            <div class="text-center text-sm text-gray-400 space-y-1">
+                <p id="last-update"></p>
+                <p id="next-update"></p>
+            </div>
+            <nav class="flex justify-center gap-2 mt-4">
+                {% for r, name in [('americas', 'Americas'), ('europe', 'Europe'), ('se_asia', 'SE Asia'), ('china', 'China')] %}
+                <a href="/{{ r }}"
+                   class="px-4 py-2 rounded transition-colors {% if region == r %}bg-dota-accent text-white{% else %}bg-gray-700 hover:bg-gray-600{% endif %}">
+                    {{ name }}
+                </a>
+                {% endfor %}
+            </nav>
+        </div>
+    </header>
+
+    <main class="max-w-6xl mx-auto px-4 py-6">
+        <div class="flex flex-col lg:flex-row gap-6">
+            <!-- Filters -->
+            <aside class="lg:w-64 flex-shrink-0">
+                <form id="filter-form" class="bg-dota-dark rounded-lg p-4 space-y-4">
+                    <input type="hidden" name="region" value="{{ region }}">
+
+                    <div>
+                        <label class="block text-sm font-medium mb-2">Rank Range</label>
+                        <div class="flex gap-2">
+                            <input type="number" name="rank_from" placeholder="From" value="{{ rank_from or '' }}"
+                                   class="w-full bg-gray-700 rounded px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-dota-accent">
+                            <input type="number" name="rank_to" placeholder="To" value="{{ rank_to or '' }}"
+                                   class="w-full bg-gray-700 rounded px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-dota-accent">
+                        </div>
+                    </div>
+
+                    <div>
+                        <label class="block text-sm font-medium mb-2">Player Name</label>
+                        <input type="text" name="name_player" placeholder="Search..." value="{{ name_player or '' }}"
+                               class="w-full bg-gray-700 rounded px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-dota-accent">
+                    </div>
+
+                    <div>
+                        <label class="block text-sm font-medium mb-2">Team</label>
+                        <select name="team" class="w-full bg-gray-700 rounded px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-dota-accent">
+                            <option value="">All</option>
+                            <option value="yes" {% if team == 'yes' %}selected{% endif %}>Has Team</option>
+                            <option value="no" {% if team == 'no' %}selected{% endif %}>No Team</option>
+                        </select>
+                    </div>
+
+                    <div>
+                        <div class="flex justify-between items-center mb-2">
+                            <label class="text-sm font-medium">Countries</label>
+                            <button type="button" id="reset-countries" class="text-xs text-gray-400 hover:text-white">Reset</button>
+                        </div>
+                        <input type="text" id="country-search" placeholder="Search countries..."
+                               class="w-full bg-gray-700 rounded px-3 py-2 text-sm mb-2 focus:outline-none focus:ring-1 focus:ring-dota-accent">
+                        <div class="max-h-48 overflow-y-auto space-y-1">
+                            {% for code, name in countries.items() %}
+                            <label class="flex items-center gap-2 text-sm cursor-pointer hover:bg-gray-700 px-2 py-1 rounded country-item">
+                                <input type="checkbox" name="countries" value="{{ code }}"
+                                       {% if code in selected_countries %}checked{% endif %}
+                                       class="rounded bg-gray-600 border-gray-500 text-dota-accent focus:ring-dota-accent">
+                                <span>{{ name }}</span>
+                            </label>
+                            {% endfor %}
+                        </div>
+                    </div>
+
+                    <button type="submit" class="w-full bg-dota-accent hover:bg-red-600 text-white rounded py-2 font-medium transition-colors">
+                        Apply Filters
+                    </button>
+                </form>
+            </aside>
+
+            <!-- Table -->
+            <section class="flex-1">
+                {% if data %}
+                <p class="text-sm text-gray-400 mb-4">Players: {{ data|length }}</p>
+                {% endif %}
+
+                <div class="bg-dota-dark rounded-lg overflow-hidden">
+                    <table class="w-full">
+                        <thead class="bg-gray-700/50">
+                            <tr>
+                                <th class="px-4 py-3 text-left text-sm font-medium w-20">#</th>
+                                <th class="px-4 py-3 text-left text-sm font-medium">Player</th>
+                                <th class="px-4 py-3 text-right text-sm font-medium w-16"></th>
+                            </tr>
+                        </thead>
+                        <tbody class="divide-y divide-gray-700/50">
+                            {% for player in data %}
+                            <tr class="hover:bg-gray-700/30 transition-colors">
+                                <td class="px-4 py-3">
+                                    <span class="{% if player.rank <= 3 %}text-dota-gold font-bold{% else %}text-gray-400{% endif %}">
+                                        {{ player.rank }}
+                                    </span>
+                                </td>
+                                <td class="px-4 py-3">
+                                    <span class="text-white">
+                                        {% if player.team_tag %}<span class="text-gray-400">{{ player.team_tag }}.</span>{% endif %}<span class="font-medium">{{ player.name }}</span>{% if player.sponsor %}<span class="text-gray-400">.{{ player.sponsor }}</span>{% endif %}
+                                    </span>
+                                </td>
+                                <td class="px-4 py-3 text-right">
+                                    {% if player.country %}
+                                    <img src="https://flagsapi.com/{{ player.country|upper }}/flat/24.png"
+                                         alt="{{ player.country }}" class="inline-block">
+                                    {% endif %}
+                                </td>
+                            </tr>
+                            {% else %}
+                            <tr>
+                                <td colspan="3" class="px-4 py-8 text-center text-gray-500">No players found</td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            </section>
+        </div>
+    </main>
+
+    <footer class="border-t border-gray-700 mt-8">
+        <div class="max-w-6xl mx-auto px-4 py-6 text-center text-sm text-gray-500">
+            <div class="flex justify-center gap-4 mb-3">
+                <a href="mailto:belekovaden31@gmail.com" class="hover:text-white transition-colors">Email</a>
+                <a href="https://github.com/Belekov-Aden" class="hover:text-white transition-colors">GitHub</a>
+            </div>
+            <p>&copy; 2024 Belekov Aden. Not affiliated with Valve.</p>
+        </div>
+    </footer>
+
+    <script>
+        document.addEventListener("DOMContentLoaded", function() {
+            const timePosted = parseInt("{{ last_update or 0 }}");
+            const nextScheduled = parseInt("{{ next_update or 0 }}");
+
+            if (timePosted) {
+                document.getElementById("last-update").textContent =
+                    "Last update: " + new Date(timePosted * 1000).toLocaleString();
+            }
+            if (nextScheduled) {
+                document.getElementById("next-update").textContent =
+                    "Next update: " + new Date(nextScheduled * 1000).toLocaleString();
+            }
+
+            // Country search
+            document.getElementById("country-search").addEventListener("input", function() {
+                const filter = this.value.toLowerCase();
+                document.querySelectorAll(".country-item").forEach(item => {
+                    const text = item.textContent.toLowerCase();
+                    item.style.display = text.includes(filter) ? "" : "none";
+                });
+            });
+
+            // Reset countries
+            document.getElementById("reset-countries").addEventListener("click", function() {
+                document.querySelectorAll('input[name="countries"]').forEach(cb => cb.checked = false);
+            });
+
+            // Form submit
+            document.getElementById("filter-form").addEventListener("submit", function(e) {
+                e.preventDefault();
+                const form = e.target;
+                const params = new URLSearchParams();
+
+                const rankFrom = form.rank_from.value;
+                const rankTo = form.rank_to.value;
+                const namePlayer = form.name_player.value;
+                const team = form.team.value;
+
+                if (rankFrom) params.set("rank_from", rankFrom);
+                if (rankTo) params.set("rank_to", rankTo);
+                if (namePlayer) params.set("name_player", namePlayer);
+                if (team) params.set("team", team);
+
+                const countries = Array.from(form.querySelectorAll('input[name="countries"]:checked'))
+                    .map(cb => cb.value);
+                if (countries.length) params.set("countries", countries.join(","));
+
+                const region = form.querySelector('input[name="region"]').value;
+                window.location.href = "/" + region + (params.toString() ? "?" + params.toString() : "");
+            });
+        });
+    </script>
+</body>
+</html>
